@@ -1,15 +1,21 @@
-name: Push APK to OpenCord server
+name: Build and release apk
 
 on:
-  push:
-    branches:
-      - master
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version'     
+        required: true
+        default: 'v0.0.0 - CHANNEL'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
+        with:
+          ref: "builds"
+      
       - name: set up JDK 11
         uses: actions/setup-java@v1
         with:
@@ -21,9 +27,29 @@ jobs:
       - name: Build Debug APK with Gradle
         run: ./gradlew assembleDebug
 
-      - name: Push build
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          release_name: Release ${{ github.event.inputs.version }}
+          draft: true
+          prerelease: true
+      - name: Upload Release Asset
+        id: upload-release-asset 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: app/build/outputs/apk/debug/app-debug.apk
+          asset_name: app-debug.apk
+          asset_content_type: application/zip
+      - name: Push build to Discord
         uses: sinshutu/upload-to-discord@v2.0.0
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_WEBHOOK: ${{ secrets.WEBHOOK }}
         with:
           args: app/build/outputs/apk/debug/app-debug.apk
